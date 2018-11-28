@@ -1,16 +1,6 @@
-CC=gcc
-CFLAGS=-pthread -I. -Wall -Wno-int-conversion -D_GNU_SOURCE
-
-#binaries=queueprodcons cpa pthread_mult
-binaries=pcMatrix
-
-all: $(binaries)
-
-pcMatrix: counter.c prodcons.c matrix.c pcmatrix.c 
-	$(CC) $(CFLAGS) $^ -o $@
-
+obj-m += lkm_example.o
+all:
+	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
 clean:
-	$(RM) -f $(binaries) *.o
-
-
+	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
  
