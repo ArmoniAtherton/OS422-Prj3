@@ -1,4 +1,7 @@
-obj-m += lkm_example.o
+CONFIG_MODULE_SIG=n
+
+obj-m += proc_module.o
+
 all:
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
 clean:
