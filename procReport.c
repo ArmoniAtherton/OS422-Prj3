@@ -24,10 +24,10 @@ module_exit(proc_cleanup);
 To run do tail -fn 10 /var/log/syslog 
 
 To remove a previously installed the module:
-sudo rmmod ./proc_module.ko
+sudo rmmod ./procReport.ko
 
 To install a newly built module:
-sudo insmod ./proc_module.ko  
+sudo insmod ./procReport.ko  
 
 Do "make clean" before pushing to git-hub
 
