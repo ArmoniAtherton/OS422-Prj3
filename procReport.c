@@ -11,11 +11,29 @@ Armoni Atherton, Joshua Atherton
 #include <linux/sched/signal.h>
 // #include <linux/mm_types.h>
 
+/* ***** Prototypes ******** */
+
+
+/* ***** Counter struct **** */ 
+static struct _counter {
+  int contig_pages = 0;
+  int noncontig_pages = 0;
+  int total_pages = 0;
+};
+
+// wanted fields example: proc_id,proc_name,contig_pages,noncontig_pages,total_pages 
+
+/* ***** Global values **** */ 
+static struct _counter = page_counter;
+
+/* ***** Functions **** */ 
+
 long virt2phys(struct mm_struct * mm, unsigned long vpage) {
   printk("YES!!");
   return 0;
 
 }
+
 int proc_init (void) {
   // printk(KERN_INFO "helloModule: kernel module initialized\n");
   struct task_struct *task;
