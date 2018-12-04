@@ -12,6 +12,8 @@ sudo rmmod ./procReport.ko
 To install a newly built module:
 sudo insmod ./procReport.ko   
 
+cd /proc to view file
+
 Do "make clean" before pushing to git-hub
 */
 
@@ -39,26 +41,27 @@ static void proc_cleanup(void);
 //proc file functions
 static int proc_report_show(struct seq_file *m, void *v);
 static int proc_report_open(struct inode *inode, struct  file *file);
+static ssize_t proc_report_write(struct file *filp, const char *buf, size_t count, loff_t *offp);
+
 
 /* ***** structs **** */ 
 typedef struct _counter {
-  int contig_pages;
-  int noncontig_pages;
-  int total_pages;
+  unsigned long contig_pages;
+  unsigned long noncontig_pages;
+  unsigned long total_pages;
 } stats_counter;
 
 static const struct file_operations proc_report_fops = {
   .owner = THIS_MODULE,
   .open = proc_report_open,
   .read = seq_read,
+  .write = proc_report_write,
   .llseek = seq_lseek,
   .release = single_release,
 };
 
-//todo: delete comment below
-// wanted fields example: proc_id,proc_name,contig_pages,noncontig_pages,total_pages 
-
 /* ***** Global values **** */ 
+// to count total pages stats
  stats_counter pages_counter =  {
    .contig_pages = 0,
    .noncontig_pages = 0,
@@ -69,35 +72,60 @@ static const struct file_operations proc_report_fops = {
 /**
  * Inialize  and start the kernal task.
  */
-static int proc_init (void) {
-  // printk(KERN_INFO "helloModule: kernel module initialized\n");
+static int proc_init (void) {                 //todo: write to proc file, add proccess counter increments
   struct task_struct *task;
   proc_create("proc_report", 0, NULL, &proc_report_fops);
+
   for_each_process(task) {
+    stats_counter one_process_counter =  {
+      .contig_pages = 0,
+      .noncontig_pages = 0,
+      .total_pages = 0
+    };
+
     //Check vaild process.
     if (task->pid > 650) {
       // this prints the name and PID of each task
-      printk("%s [%d]\n",task->comm , task->pid);
+      //printk("%d,%s\n", task->pid, task->comm );
 
       struct vm_area_struct *vma = 0;
       unsigned long vpage;
+      unsigned long prev_page;
       if (task->mm && task->mm->mmap) {
         for (vma = task->mm->mmap; vma; vma = vma->vm_next)
           for (vpage = vma->vm_start; vpage < vma->vm_end; vpage += PAGE_SIZE) {
             unsigned long phys = virt2phys(task->mm, vpage);
             //printk("This is physical adress: %lu \n", phys);
+            if (prev_page){}
+
+            prev_page = phys;
           }
-      }          
-    }
-    // printk("%s [%d]\n",task->comm , task->pid);
-  }
+      }
+      //proc_id,proc_name,contig_pages,noncontig_pages,total_pages
+      printk("%d,%s,%lu,%lu,%lu", task->pid, task->comm,
+        one_process_counter.contig_pages, 
+        one_process_counter.noncontig_pages, 
+        one_process_counter.total_pages);
+
+      //add to total page count
+      pages_counter.contig_pages += one_process_counter.contig_pages;
+      pages_counter.noncontig_pages += one_process_counter.noncontig_pages;
+      pages_counter.total_pages += one_process_counter.total_pages;
+
+    } // end if > 650
+  } // end for_each
+  // TOTALS,,contig_pages,noncontig_pages,total_pages
+  printk("TOTALS,,%lu,%lu,%lu",
+    pages_counter.contig_pages, 
+    pages_counter.noncontig_pages, 
+    pages_counter.total_pages);
   return 0;
 }
 
 /**
  * Get the mapping of virtual to physical memory addresses.
  */
-static unsigned long virt2phys(struct mm_struct * mm, unsigned long vpage) {
+static unsigned long virt2phys(struct mm_struct * mm, unsigned long vpage) { //todo: //?!?!?!?!?!?! NOT SURE IF IT SHOULD BE UNSINED LONG
   pgd_t *pgd;
   p4d_t *p4d;
   pud_t *pud;
@@ -116,7 +144,6 @@ static unsigned long virt2phys(struct mm_struct * mm, unsigned long vpage) {
   pud = pud_offset(p4d, vpage);
   if (pud_none(*pud) || pud_bad(*pud))
     return 0;
-  //?!?!?!?!?!?! NOT SURE IF IT SHOULD BE UNSINED LONG
    pmt = pmd_offset(pud, vpage);
   if (pmd_none(*pmt) || pmd_bad(*pmt))
     return 0;
@@ -127,9 +154,9 @@ static unsigned long virt2phys(struct mm_struct * mm, unsigned long vpage) {
   if (!(page = pte_page(*pte)))
     return 0;
 
-  unsigned long physical_page_addr = page_to_phys(page);
+  //unsigned long physical_page_addr = page_to_phys(page);
   pte_unmap(pte);
-  return physical_page_addr;
+  return page_to_phys(page); //physical_page_addr;
 }
 
 /**
@@ -144,7 +171,12 @@ static void proc_cleanup(void) {
  * write 
  */
 static int proc_report_show(struct seq_file *m, void *v) {
-  seq_printf(m, "Hello proc!\n");
+  seq_printf(m, "PROCESS REPORT: \nproc_id,proc_name,contig_pages,noncontig_pages,total_pages \n");
+  return 0;
+}
+
+static ssize_t proc_report_write(struct file *filp, const char *buf, size_t count, loff_t *offp) {
+  //seq_printf(mfilp, "PROCESS REPORT: \nproc_id,proc_name,contig_pages,noncontig_pages,total_pages \n");
   return 0;
 }
 
