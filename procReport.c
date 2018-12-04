@@ -102,7 +102,7 @@ unsigned long virt2phys(struct mm_struct * mm, unsigned long vpage) {
   pud = pud_offset(p4d, vpage);
   if (pud_none(*pud) || pud_bad(*pud))
     return 0;
-  //?!?!?!?!?!?! NOT SURE IF IT SHOULD BE UNSINED LONG
+
    pmt = pmd_offset(pud, vpage);
   if (pmd_none(*pmt) || pmd_bad(*pmt))
     return 0;
@@ -115,6 +115,7 @@ unsigned long virt2phys(struct mm_struct * mm, unsigned long vpage) {
 
   unsigned long physical_page_addr = page_to_phys(page);
   pte_unmap(pte);
+  
   return physical_page_addr;
 }
 
