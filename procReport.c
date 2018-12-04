@@ -90,16 +90,21 @@ static int proc_init (void) {                 //todo: write to proc file, add pr
 
       struct vm_area_struct *vma = 0;
       unsigned long vpage;
-      unsigned long prev_page;
+      unsigned long prev_page_phys = 0;
       if (task->mm && task->mm->mmap) {
-        for (vma = task->mm->mmap; vma; vma = vma->vm_next)
+        for (vma = task->mm->mmap; vma; vma = vma->vm_next) {
+          one_process_counter.total_pages += 1;
           for (vpage = vma->vm_start; vpage < vma->vm_end; vpage += PAGE_SIZE) {
             unsigned long phys = virt2phys(task->mm, vpage);
             //printk("This is physical adress: %lu \n", phys);
-            if (prev_page){}
-
-            prev_page = phys;
+            if (prev_page_phys - phys == 0) { // contiguous
+              one_process_counter.contig_pages += 1;
+            } else {
+              one_process_counter.noncontig_pages += 1;
+            }
+            prev_page_phys = phys;
           }
+        }
       }
       //proc_id,proc_name,contig_pages,noncontig_pages,total_pages
       printk("%d,%s,%lu,%lu,%lu", task->pid, task->comm,
@@ -111,7 +116,6 @@ static int proc_init (void) {                 //todo: write to proc file, add pr
       pages_counter.contig_pages += one_process_counter.contig_pages;
       pages_counter.noncontig_pages += one_process_counter.noncontig_pages;
       pages_counter.total_pages += one_process_counter.total_pages;
-
     } // end if > 650
   } // end for_each
   // TOTALS,,contig_pages,noncontig_pages,total_pages
