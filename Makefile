@@ -11,4 +11,11 @@ test:
 	sudo insmod ./procReport.ko
 	sudo rmmod ./procReport.ko
 	dmesg
+load:
+	sudo insmod ./procReport.ko
+remove:
+	sudo rmmod ./procReport.ko
+tail:
+	tail -fn 10 /var/log/syslog
+
  
