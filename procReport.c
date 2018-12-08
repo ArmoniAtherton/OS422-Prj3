@@ -90,6 +90,9 @@ static int proc_init (void) {
   return 0;
 }
 
+/**
+ * Iterate through the page tables collecting stats on memory.
+ */
 static void iterate_pages(void) {
   struct task_struct *task;
   counter_list *last = &stats_list;
