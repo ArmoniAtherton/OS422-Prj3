@@ -84,7 +84,6 @@ static int proc_init (void) {
   
   iterate_pages();
   write_to_console();
-  write_to_proc_report();
 
   proc_create("proc_report", 0, NULL, &proc_report_fops);
   return 0;
@@ -103,6 +102,10 @@ static void iterate_pages(void) {
       .contig_pages = 0,
       .noncontig_pages = 0,
       .total_pages = 0
+    };
+    counter_list list_node =  {
+      .page = one_process_counter,
+      .next = last
     };
     
     //Check vaild process.
@@ -136,10 +139,7 @@ static void iterate_pages(void) {
       total_noncontig_pgs += one_process_counter.noncontig_pages;
       total_pgs += one_process_counter.total_pages;
     } // end if > 650
-    counter_list list_node =  {
-      .page = one_process_counter,
-      .next = last
-    };
+  
     last = list_node.next;
   } // end for_each
 }
@@ -200,7 +200,6 @@ static void write_to_console(void) {
  */
 static void proc_cleanup(void) {
   remove_proc_entry("proc_report", NULL);
-  printk(KERN_INFO "helloModule: performing cleanup of module\n");
 }
 
 /**
@@ -209,8 +208,7 @@ static void proc_cleanup(void) {
 static int proc_report_show(struct seq_file *m, void *v) {
   seq_printf(m, "PROCESS REPORT: \nproc_id,proc_name,contig_pages,noncontig_pages,total_pages \n");
   
-  counter_list * item;
-  item = &stats_list;
+  counter_list *item = &stats_list;
   while (item) {
     //proc_id,proc_name,contig_pages,noncontig_pages,total_pages
     seq_printf(m, "%lu,%s,%lu,%lu,%lu\n", item->page.pid, item->page.name,
