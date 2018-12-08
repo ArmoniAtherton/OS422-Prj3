@@ -20,7 +20,6 @@ Do "make clean" before pushing to git-hub
 
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
-//#include<linux/list.h>
 #include <linux/slab.h>
 
 // #include <linux/mm_types.h>
@@ -61,11 +60,11 @@ static const struct file_operations proc_report_fops = {
   .release = single_release,
 };
 // to count total pages stats
-unsigned long total_contig_pgs = 0;
-unsigned long total_noncontig_pgs = 0;
-unsigned long total_pgs = 0;
+static unsigned long total_contig_pgs = 0;
+static unsigned long total_noncontig_pgs = 0;
+static unsigned long total_pgs = 0;
 // linked list of page stats
-counter_list *stats_list_head = NULL;
+static counter_list *stats_list_head = NULL;
 
 /* ***** Functions For the kernel ***************** */ 
 /**
@@ -74,9 +73,10 @@ counter_list *stats_list_head = NULL;
 static int proc_init (void) { 
   
   iterate_pages();
-  write_to_console();
 
+  write_to_console();
   proc_create("proc_report", 0, NULL, &proc_report_fops);
+
   return 0;
 }
 
@@ -90,17 +90,17 @@ static void iterate_pages(void) {
 
   for_each_process(task) {
 
-    node = kmalloc(sizeof(counter_list), GFP_KERNEL);
-
-    //update fields for a page
-    node->pid = task->pid;
-    node->name = task->comm;
-    node->contig_pages = 0;
-    node->noncontig_pages = 0;
-    node->total_pages = 0;
-    
     //Check vaild process.
-    if (task->pid > 650) {
+    if (task->pid > 650) { 
+      //allocate space for a new node
+      node = kmalloc(sizeof(counter_list), GFP_KERNEL);
+      //update fields for a page
+      node->pid = task->pid;
+      node->name = task->comm;
+      node->contig_pages = 0;
+      node->noncontig_pages = 0;
+      node->total_pages = 0;
+
       struct vm_area_struct *vma = 0;
       unsigned long vpage;
       unsigned long prev_page_phys = 0;
@@ -128,24 +128,24 @@ static void iterate_pages(void) {
       total_contig_pgs += node->contig_pages;
       total_noncontig_pgs += node->noncontig_pages;
       total_pgs += node->total_pages;
-    } // end if > 650
-    
-    //insert node into linked list
-    if(stats_list_head == NULL) {  // when linked list is empty
+
+      //insert node into linked list
+      if(stats_list_head == NULL) {  // when linked list is empty
         stats_list_head = node;
         curr = stats_list_head;    
-    }
-    else { // Point the previous last node to the new node created.
+      }
+      else { // Point the previous last node to the new node created.
         curr->next = node;
         curr = curr->next;
-    }
+      }
+    } // end if > 650
   } // end for_each
 }
 
 /**
  * Get the mapping of virtual to physical memory addresses.
  */
-static unsigned long virt2phys(struct mm_struct * mm, unsigned long vpage) { //todo: //?!?!?!?!?!?! NOT SURE IF IT SHOULD BE UNSINED LONG
+static unsigned long virt2phys(struct mm_struct * mm, unsigned long vpage) { 
   pgd_t *pgd;
   p4d_t *p4d;
   pud_t *pud;
@@ -204,10 +204,11 @@ static void proc_cleanup(void) {
  * write 
  */
 static int proc_report_show(struct seq_file *m, void *v) {
-  
+
   counter_list *item = stats_list_head;
   counter_list *prev = item;
   seq_printf(m, "PROCESS REPORT: \nproc_id,proc_name,contig_pages,noncontig_pages,total_pages \n");
+
   while (item) {
     //proc_id,proc_name,contig_pages,noncontig_pages,total_pages
     seq_printf(m, "%lu,%s,%lu,%lu,%lu\n", item->pid, item->name,
