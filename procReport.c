@@ -17,15 +17,16 @@ cd /proc to view file
 Do "make clean" before pushing to git-hub
 */
 
-#include <linux/module.h>	/* Needed by all modules */
-#include <linux/kernel.h>	/* Needed for KERN_INFO */
-// #include <linux/init.h>		/* Needed for the macros */
+#include <linux/module.h> /* Needed by all modules */
+#include <linux/kernel.h> /* Needed for KERN_INFO */
+// #include <linux/init.h>    /* Needed for the macros */
 
 #include <linux/sched/signal.h>
 #include <asm/pgtable.h>
 
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
+#include<linux/list.h>
 
 // #include <linux/mm_types.h>
 
@@ -34,96 +35,110 @@ MODULE_AUTHOR("Armoni Atherton, Josh Atherton");
 MODULE_DESCRIPTION("Count the segmentation of the pages memorry.");
 MODULE_VERSION("1.0");
 
-/* ***** Prototypes ******** */
-static int proc_init (void);
-static unsigned long virt2phys(struct mm_struct * mm, unsigned long vpage);
-static void proc_cleanup(void);
-//proc file functions
-static int proc_report_show(struct seq_file *m, void *v);
-static int proc_report_open(struct inode *inode, struct  file *file);
-static ssize_t proc_report_write(struct file *filp, const char *buf, size_t count, loff_t *offp);
-
-
 /* ***** structs **** */ 
 typedef struct _counter {
+  unsigned long pid;
+  char * name;
   unsigned long contig_pages;
   unsigned long noncontig_pages;
   unsigned long total_pages;
 } stats_counter;
 
+typedef struct _counter_list {
+  stats_counter page;
+  struct _counter_list * next;
+} counter_list;
+
+/* ***** Prototypes ******** */
+static int proc_init (void);
+static unsigned long virt2phys(struct mm_struct * mm, unsigned long vpage);
+static void iterate_pages(void);
+static void write_to_console(void);
+
+//proc file functions
+static int proc_report_show(struct seq_file *m, void *v);
+static int proc_report_open(struct inode *inode, struct  file *file);
+static void proc_cleanup(void);
+
+
+/* ***** Global values **** */ 
 static const struct file_operations proc_report_fops = {
   .owner = THIS_MODULE,
   .open = proc_report_open,
   .read = seq_read,
-  .write = proc_report_write,
   .llseek = seq_lseek,
   .release = single_release,
 };
-
-/* ***** Global values **** */ 
 // to count total pages stats
- stats_counter pages_counter =  {
-   .contig_pages = 0,
-   .noncontig_pages = 0,
-   .total_pages = 0
- };
+unsigned long total_contig_pgs = 0;
+unsigned long total_noncontig_pgs = 0;
+unsigned long total_pgs = 0;
+// linked list of page stats
+counter_list stats_list;
 
 /* ***** Functions For the kernel ***************** */ 
 /**
  * Inialize  and start the kernal task.
  */
-static int proc_init (void) {                 //todo: write to proc file, add proccess counter increments
-  struct task_struct *task;
-  proc_create("proc_report", 0, NULL, &proc_report_fops);
+static int proc_init (void) { 
+  
+  iterate_pages();
+  write_to_console();
+  write_to_proc_report();
 
+  proc_create("proc_report", 0, NULL, &proc_report_fops);
+  return 0;
+}
+
+static void iterate_pages(void) {
+  struct task_struct *task;
+  counter_list *last = &stats_list;
   for_each_process(task) {
     stats_counter one_process_counter =  {
+      .pid = 0,
+      .name = 0,
       .contig_pages = 0,
       .noncontig_pages = 0,
       .total_pages = 0
     };
-
+    
     //Check vaild process.
     if (task->pid > 650) {
-      // this prints the name and PID of each task
-      //printk("%d,%s\n", task->pid, task->comm );
-
       struct vm_area_struct *vma = 0;
       unsigned long vpage;
       unsigned long prev_page_phys = 0;
       if (task->mm && task->mm->mmap) {
         for (vma = task->mm->mmap; vma; vma = vma->vm_next) {
-          one_process_counter.total_pages += 1;
           for (vpage = vma->vm_start; vpage < vma->vm_end; vpage += PAGE_SIZE) {
             unsigned long phys = virt2phys(task->mm, vpage);
-            //printk("This is physical adress: %lu \n", phys);
-            if (prev_page_phys - phys == 0) { // contiguous
-              one_process_counter.contig_pages += 1;
-            } else {
-              one_process_counter.noncontig_pages += 1;
+            one_process_counter.total_pages += 1;
+            //
+            if ( phys != 0) {
+              if (prev_page_phys - phys == 0) { // contiguous
+                one_process_counter.contig_pages += 1;
+              } else {
+                one_process_counter.noncontig_pages += 1;
+              }
             }
             prev_page_phys = phys;
           }
         }
       }
-      //proc_id,proc_name,contig_pages,noncontig_pages,total_pages
-      printk("%d,%s,%lu,%lu,%lu", task->pid, task->comm,
-        one_process_counter.contig_pages, 
-        one_process_counter.noncontig_pages, 
-        one_process_counter.total_pages);
+      //update fields for a page
+      one_process_counter.pid = task->pid;
+      one_process_counter.name = task->comm;
 
       //add to total page count
-      pages_counter.contig_pages += one_process_counter.contig_pages;
-      pages_counter.noncontig_pages += one_process_counter.noncontig_pages;
-      pages_counter.total_pages += one_process_counter.total_pages;
+      total_contig_pgs += one_process_counter.contig_pages;
+      total_noncontig_pgs += one_process_counter.noncontig_pages;
+      total_pgs += one_process_counter.total_pages;
     } // end if > 650
+    counter_list list_node =  {
+      .page = one_process_counter,
+      .next = last
+    };
+    last = list_node.next;
   } // end for_each
-  // TOTALS,,contig_pages,noncontig_pages,total_pages
-  printk("TOTALS,,%lu,%lu,%lu",
-    pages_counter.contig_pages, 
-    pages_counter.noncontig_pages, 
-    pages_counter.total_pages);
-  return 0;
 }
 
 /**
@@ -163,6 +178,20 @@ static unsigned long virt2phys(struct mm_struct * mm, unsigned long vpage) { //t
   return page_to_phys(page); //physical_page_addr;
 }
 
+static void write_to_console(void) {
+  counter_list * item;
+  item = &stats_list;
+  while (item) {
+    //proc_id,proc_name,contig_pages,noncontig_pages,total_pages
+    printk("%lu,%s,%lu,%lu,%lu", item->page.pid, item->page.name,
+        item->page.contig_pages, item->page.noncontig_pages, item->page.total_pages);
+    item = item->next;
+  }
+  // TOTALS,,contig_pages,noncontig_pages,total_pages
+  printk("TOTALS,,%lu,%lu,%lu",
+    total_contig_pgs, total_noncontig_pgs, total_pgs); 
+}
+
 /**
  * Finish and end the kernal task.
  */
@@ -176,11 +205,19 @@ static void proc_cleanup(void) {
  */
 static int proc_report_show(struct seq_file *m, void *v) {
   seq_printf(m, "PROCESS REPORT: \nproc_id,proc_name,contig_pages,noncontig_pages,total_pages \n");
-  return 0;
-}
+  
+  counter_list * item;
+  item = &stats_list;
+  while (item) {
+    //proc_id,proc_name,contig_pages,noncontig_pages,total_pages
+    seq_printf(m, "%lu,%s,%lu,%lu,%lu\n", item->page.pid, item->page.name,
+        item->page.contig_pages, item->page.noncontig_pages, item->page.total_pages);
+    item = item->next;
+  }
+  // TOTALS,,contig_pages,noncontig_pages,total_pages
+  seq_printf(m, "TOTALS,,%lu,%lu,%lu\n",
+    total_contig_pgs, total_noncontig_pgs, total_pgs); 
 
-static ssize_t proc_report_write(struct file *filp, const char *buf, size_t count, loff_t *offp) {
-  //seq_printf(mfilp, "PROCESS REPORT: \nproc_id,proc_name,contig_pages,noncontig_pages,total_pages \n");
   return 0;
 }
 
@@ -195,12 +232,3 @@ static int proc_report_open(struct inode *inode, struct  file *file) {
 /* ******** Kernal Run functions ************************ */
 module_init(proc_init);
 module_exit(proc_cleanup);
-
-
-//todo: delete
-// struct vm_area_struct *vma = 0;
-// unsigned long vpage;
-  // if (task->mm && task->mm->mmap)
-  //     for (vma = task->mm->mmap; vma; vma = vma->vm_next)
-  //         for (vpage = vma->vm_start; vpage < vma->vm_end; vpage += PAGE_SIZE)
-  //             unsigned long phys = virt2phys(task->mm, vpage);
