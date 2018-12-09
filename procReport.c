@@ -13,16 +13,12 @@ Do "make clean" before pushing to git-hub
 
 #include <linux/module.h> /* Needed by all modules */
 #include <linux/kernel.h> /* Needed for KERN_INFO */
-// #include <linux/init.h>    /* Needed for the macros */
-
 #include <linux/sched/signal.h>
 #include <asm/pgtable.h>
-
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/slab.h>
 
-// #include <linux/mm_types.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Armoni Atherton, Josh Atherton");
@@ -50,7 +46,6 @@ static int proc_report_show(struct seq_file *m, void *v);
 static int proc_report_open(struct inode *inode, struct  file *file);
 static void proc_cleanup(void);
 
-
 /* ***** Global values **** */ 
 static const struct file_operations proc_report_fops = {
   .owner = THIS_MODULE,
@@ -73,7 +68,6 @@ static counter_list *stats_list_head = NULL;
 static int proc_init (void) { 
   
   iterate_pages();
-
   write_to_console();
   proc_create("proc_report", 0, NULL, &proc_report_fops);
 
@@ -85,8 +79,12 @@ static int proc_init (void) {
  */
 static void iterate_pages(void) {
   struct task_struct *task;
+  struct vm_area_struct *vma;
   counter_list *curr = stats_list_head;
   counter_list *node;
+  unsigned long vpage;
+  unsigned long prev_page_phys;
+  unsigned long phys = 0;
 
   for_each_process(task) {
 
@@ -102,18 +100,17 @@ static void iterate_pages(void) {
       node->total_pages = 0;
       node->next = NULL;
 
-      struct vm_area_struct *vma = 0;
-      unsigned long vpage;
-      unsigned long prev_page_phys = 0;
+      vma = 0;
+      prev_page_phys = 0;
       if (task->mm && task->mm->mmap) {
         for (vma = task->mm->mmap; vma; vma = vma->vm_next) {
           //Iterates through virtual pages.
           prev_page_phys = 0;
           for (vpage = vma->vm_start; vpage < vma->vm_end; vpage += PAGE_SIZE) {
-            unsigned long phys = virt2phys(task->mm, vpage);
-            node->total_pages += 1;
-            //
+            phys = virt2phys(task->mm, vpage);
+            //If memeory has been allocated.
             if ( phys != 0) {
+              node->total_pages += 1;
               if ((prev_page_phys + PAGE_SIZE) - phys == 0) { // contiguous
                 node->contig_pages += 1;
               } else {
@@ -123,19 +120,18 @@ static void iterate_pages(void) {
             }
           }
         }
-      }
 
-      //add to total page count
-      total_contig_pgs += node->contig_pages;
-      total_noncontig_pgs += node->noncontig_pages;
-      total_pgs += node->total_pages;
+        // add to total page count
+        total_contig_pgs += node->contig_pages;
+        total_noncontig_pgs += node->noncontig_pages;
+        total_pgs += node->total_pages;
+      }
 
       //insert node into linked list
       if(stats_list_head == NULL) {  // when linked list is empty
         stats_list_head = node;
         curr = stats_list_head;    
-      }
-      else { // Point the previous last node to the new node created.
+      } else { // Point the previous last node to the new node created.
         curr->next = node;
         curr = curr->next;
       }
